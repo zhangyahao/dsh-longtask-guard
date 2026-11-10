@@ -1,0 +1,7 @@
+{
+  "id": "longtask-guard",
+  "meta": {
+    "title": "长任务护栏",
+    "description": "把会话里臃肿的历史外化到项目文件，让长任务不被上下文拖垮。"
+  }
+}

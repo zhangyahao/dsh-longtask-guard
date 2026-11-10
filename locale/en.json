@@ -1,0 +1,7 @@
+{
+  "id": "longtask-guard",
+  "meta": {
+    "title": "Long-task Guard",
+    "description": "Externalize bulky session history to project files so long-running tasks keep working."
+  }
+}

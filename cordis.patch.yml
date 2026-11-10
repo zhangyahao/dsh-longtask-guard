@@ -1,0 +1,13 @@
+- insert:
+    - id: longtask-guard
+      name: dsh-longtask-guard
+      config:
+        enabled: true
+        externalizeAtChars: 1200000
+        keepRecentMessages: 40
+        archiveDir: .dsh-task/archive
+        captureReasoning: true
+        minReasoningChars: 400
+        reasoningDir: .dsh-task/reasoning
+        appendSummary: true
+        summaryExcerptChars: 2400
