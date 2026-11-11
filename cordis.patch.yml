@@ -1,13 +1,7 @@
 - insert:
     - id: longtask-guard
       name: dsh-longtask-guard
+      # 这里只放「首次安装时」的开关；其余参数交给 index.js 的 DEFAULTS，
+      # 用户改过的值持久化在 $DSH_HOME/data/longtask-guard.json 并优先。
       config:
         enabled: true
-        externalizeAtChars: 1200000
-        keepRecentMessages: 40
-        archiveDir: .dsh-task/archive
-        captureReasoning: true
-        minReasoningChars: 400
-        reasoningDir: .dsh-task/reasoning
-        appendSummary: true
-        summaryExcerptChars: 2400
