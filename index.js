@@ -446,14 +446,17 @@ export function apply(ctx, config = {}) {
     /* 无 session/event 时只保留上下文外化 */
   }
 
-  const ok = (text) => ({ content: [{ type: 'text', text }] });
+  const ok = (text) => String(text);
 
   ctx.tools.register({
     name: 'longtask_status',
     description:
       '查看长任务护栏状态：阈值、保留窗口、归档目录，以及本次运行以来的收缩与救援统计（收缩次数、被收缩消息数、节省字符、空正文救援次数）。长任务中怀疑上下文过大或担心丢内容时先调它。',
     parameters: { type: 'object', properties: {}, additionalProperties: false },
-    output: { schema: { type: 'string' }, render: (value) => String(value) },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: String(value) }],
+    },
     async execute() {
       const lines = [
         `enabled=${state.enabled}`,
@@ -485,7 +488,10 @@ export function apply(ctx, config = {}) {
       properties: { force: { type: 'boolean', description: '绕过冷却，立即在下一轮执行' } },
       additionalProperties: false,
     },
-    output: { schema: { type: 'string' }, render: (value) => String(value) },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: String(value) }],
+    },
     async execute(args) {
       if (args && args.force) lastArchiveMessageCount = 0;
       return ok('已登记：下一轮 pre-step 若消息总量超过阈值就会执行收缩。想知道结果，下一轮结束后调用 longtask_status。');
@@ -505,7 +511,10 @@ export function apply(ctx, config = {}) {
       required: ['summary'],
       additionalProperties: false,
     },
-    output: { schema: { type: 'string' }, render: (value) => String(value) },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: String(value) }],
+    },
     async execute(args, exec) {
       const root = (exec && exec.cwd) || process.cwd();
       const dir = path.join(root, '.dsh-task');
@@ -533,7 +542,10 @@ export function apply(ctx, config = {}) {
       },
       additionalProperties: false,
     },
-    output: { schema: { type: 'string' }, render: (value) => String(value) },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: String(value) }],
+    },
     async execute(args, exec) {
       const root = (exec && exec.cwd) || process.cwd();
       const dir = path.isAbsolute(state.reasoningDir) ? state.reasoningDir : path.join(root, state.reasoningDir);
