@@ -18,7 +18,9 @@ export const inject = ['tools'];
 
 const DEFAULTS = {
   enabled: true,
-  externalizeAtChars: 1200000,
+  // 1M token 窗口约合 400 万字符；60 万字符（约 15 万 token）时开始外化，
+  // 既留足余量，又不至于每轮都动消息、白白失效一次 prompt 缓存。
+  externalizeAtChars: 600000,
   keepRecentMessages: 40,
   archiveDir: '.dsh-task/archive',
   minMessageChars: 1200,
@@ -166,6 +168,14 @@ function sessionTag(payload) {
   return String(id).slice(0, 24);
 }
 
+function usableRoot(dir) {
+  if (typeof dir !== 'string' || dir.length === 0) return null;
+  const profileDir = process.env.DSH_PROFILE_DIR;
+  // profile 目录只是 DSH 的配置目录，不是用户项目；落在这里会变成孤儿归档。
+  if (profileDir && path.resolve(dir) === path.resolve(profileDir)) return null;
+  return dir;
+}
+
 function workingDir(payload) {
   const agent = (payload && payload.agent) || {};
   const candidates = [
@@ -176,9 +186,10 @@ function workingDir(payload) {
     agent.session && agent.session.cwd,
   ];
   for (const c of candidates) {
-    if (typeof c === 'string' && c.length > 0) return c;
+    const root = usableRoot(c);
+    if (root) return root;
   }
-  return process.cwd();
+  return dshHome();
 }
 
 function shrinkMessages(state, messages, payload) {
@@ -249,11 +260,12 @@ function sessionIdOf(session) {
 }
 
 function sessionCwd(session) {
-  const candidates = [session && session.cwd, session && session.workspace && session.workspace.path, process.cwd()];
+  const candidates = [session && session.cwd, session && session.workspace && session.workspace.path];
   for (const c of candidates) {
-    if (typeof c === 'string' && c.length > 0) return c;
+    const root = usableRoot(c);
+    if (root) return root;
   }
-  return process.cwd();
+  return dshHome();
 }
 
 function escapeSummary(text) {
@@ -457,12 +469,16 @@ export function apply(ctx, config = {}) {
       schema: { type: 'string' },
       render: (_args, value) => [{ type: 'text', text: String(value) }],
     },
-    async execute() {
+    async execute(args, exec) {
+      const root = usableRoot(exec && exec.cwd) || dshHome();
+      const archiveAbs = path.isAbsolute(state.archiveDir) ? state.archiveDir : path.join(root, state.archiveDir);
+      const reasoningAbs = path.isAbsolute(state.reasoningDir) ? state.reasoningDir : path.join(root, state.reasoningDir);
       const lines = [
         `enabled=${state.enabled}`,
         `外部化阈值 externalizeAtChars=${state.externalizeAtChars} 字符（约 ${Math.round(state.externalizeAtChars / 4)} token）`,
         `保留最近消息 keepRecentMessages=${state.keepRecentMessages} 条`,
-        `归档目录=${state.archiveDir}；reasoning 目录=${state.reasoningDir}`,
+        `归档目录=${archiveAbs}`,
+        `reasoning 目录=${reasoningAbs}`,
         `本次运行：收缩 ${state.stats.runs} 次，共 ${state.stats.shrunkMessages} 条消息，节省 ${state.stats.savedChars} 字符`,
         `退化救援：${state.stats.rescued} 次`,
       ];
@@ -516,7 +532,7 @@ export function apply(ctx, config = {}) {
       render: (_args, value) => [{ type: 'text', text: String(value) }],
     },
     async execute(args, exec) {
-      const root = (exec && exec.cwd) || process.cwd();
+      const root = usableRoot(exec && exec.cwd) || dshHome();
       const dir = path.join(root, '.dsh-task');
       const file = path.join(dir, `handoff-${new Date().toISOString().replace(/[:.]/g, '-')}.md`);
       try {
@@ -547,7 +563,7 @@ export function apply(ctx, config = {}) {
       render: (_args, value) => [{ type: 'text', text: String(value) }],
     },
     async execute(args, exec) {
-      const root = (exec && exec.cwd) || process.cwd();
+      const root = usableRoot(exec && exec.cwd) || dshHome();
       const dir = path.isAbsolute(state.reasoningDir) ? state.reasoningDir : path.join(root, state.reasoningDir);
       try {
         if (args && args.action === 'read' && args.file) {

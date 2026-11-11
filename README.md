@@ -39,9 +39,9 @@ plugin_manager(action="install_bundle", target="<克隆目录的绝对路径>")
 ```yaml
 config:
   enabled: true
-  externalizeAtChars: 1200000   # 消息总字符超过它才外化（约 30 万 token）
+  externalizeAtChars: 600000    # 消息总字符超过它才外化（约 15 万 token）
   keepRecentMessages: 40        # 最近 40 条消息不动
-  archiveDir: .dsh-task/archive # 相对当前会话工作目录
+  archiveDir: .dsh-task/archive # 相对会话工作目录；工作目录不可用时落 $DSH_HOME
   minMessageChars: 1200         # 单条消息至少这么长才值得收缩
   cooldownMessages: 60          # 两次收缩之间至少间隔的消息条数
   captureReasoning: true        # 是否做空正文救援
@@ -53,6 +53,8 @@ config:
 ```
 
 配置与统计持久化在 `$DSH_HOME/data/longtask-guard.json`，重启后保留。
+
+**归档位置怎么定**（踩过的坑）：优先取会话的工作目录（`agent.cwd` / `exec.cwd`）；如果它等于 `$DSH_PROFILE_DIR`（DSH 的配置目录，形如 `...\profiles\desktop`），会被跳过——那是配置目录不是项目，归档落进去会变成孤儿文件；最后兜底 `$DSH_HOME`。所以正常情况下归档在项目根（如 `D:\ceyearnplm\.dsh-task\`），而不是插件或 profile 目录。`longtask_status` 会直接打印解析后的绝对路径。
 
 ## 工具
 
