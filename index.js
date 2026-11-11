@@ -35,6 +35,15 @@ const DEFAULTS = {
 
 const MARK = '[ctx-externalized]';
 
+// 早期测试脚本曾把这组值写进状态文件，导致默认值被永久污染（所有会话读到 30000/8）。
+// 读到这组组合就当作测试残留忽略，保留用户真正自己改过的配置。
+const LEGACY_TEST_STATE = {
+  externalizeAtChars: 30000,
+  keepRecentMessages: 8,
+  minMessageChars: 500,
+  minReasoningChars: 100,
+};
+
 function dshHome() {
   return process.env.DSH_HOME || process.env.DSH_PROFILE_DIR || path.join(process.cwd(), '.dsh');
 }
@@ -62,11 +71,25 @@ function loadState(config = {}) {
   }
   const saved = readJsonSafe(stateFile());
   if (saved && typeof saved === 'object') {
+    const polluted =
+      saved.externalizeAtChars === LEGACY_TEST_STATE.externalizeAtChars &&
+      saved.keepRecentMessages === LEGACY_TEST_STATE.keepRecentMessages;
     for (const key of Object.keys(DEFAULTS)) {
-      if (saved[key] !== undefined) state[key] = saved[key];
+      if (saved[key] === undefined) continue;
+      if (polluted && LEGACY_TEST_STATE[key] !== undefined) continue;
+      state[key] = saved[key];
     }
-    if (saved.stats) state.stats = { ...state.stats, ...saved.stats };
-    if (typeof saved.lastArchiveAt === 'number') state.lastArchiveAt = saved.lastArchiveAt;
+    if (saved.stats) {
+      state.stats = { ...state.stats, ...saved.stats };
+      if (polluted && state.stats.last && String(state.stats.last.archive || '').includes('longtask-guard-test')) {
+        state.stats.runs = 0;
+        state.stats.shrunkMessages = 0;
+        state.stats.savedChars = 0;
+        state.stats.last = null;
+        state.lastArchiveAt = 0;
+      }
+    }
+    if (typeof saved.lastArchiveAt === 'number' && !polluted) state.lastArchiveAt = saved.lastArchiveAt;
   }
   return state;
 }
