@@ -54,7 +54,7 @@ config:
 
 配置与统计持久化在 `$DSH_HOME/data/longtask-guard.json`，重启后保留。
 
-**归档位置怎么定**（踩过的坑）：优先取会话的工作目录（`agent.cwd` / `exec.cwd`）；如果它等于 `$DSH_PROFILE_DIR`（DSH 的配置目录，形如 `...\profiles\desktop`），会被跳过——那是配置目录不是项目，归档落进去会变成孤儿文件；最后兜底 `$DSH_HOME`。所以正常情况下归档在项目根（如 `D:\ceyearnplm\.dsh-task\`），而不是插件或 profile 目录。`longtask_status` 会直接打印解析后的绝对路径。
+**归档位置怎么定**（按会话目录走）：依次尝试 `agent.session.header.cwd`、`session.cwd`、`workingDirectory` 服务、`workspaceRegistry` 按 sessionId 反查；拿到就落在**该会话工作目录**下的 `.dsh-task/`（例如 `D:\ceyearnplm\.dsh-task\`、`D:\DeepSeek Harness\.dsh-task\`）。`$DSH_PROFILE_DIR`（形如 `...\profiles\desktop`）会被显式跳过——那是 DSH 的配置目录不是项目，归档落进去会变成孤儿文件；全都拿不到时才兜底 `$DSH_HOME`。`longtask_status` 会直接打印解析后的绝对路径。
 
 ## 工具
 

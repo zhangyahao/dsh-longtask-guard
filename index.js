@@ -199,8 +199,49 @@ function usableRoot(dir) {
   return dir;
 }
 
-function workingDir(payload) {
+/**
+ * 取 agent 的 cwd（会话所在工作目录）。
+ * `Agent` 的公开接口只有 `{ id }`，所以按从直觉到兜底挨个试，最后用 workspaceRegistry 的
+ * sessionIds 反查；都拿不到就返回空串，由调用方决定兜底到哪。
+ */
+function agentCwd(ctx, agent) {
+  const attempts = [
+    () => agent?.session?.header?.cwd,
+    () => agent?.session?.cwd,
+    () => agent?.ctx?.session?.header?.cwd,
+    () => agent?.ctx?.get?.('session')?.header?.cwd,
+    () => {
+      const wd = agent?.ctx?.get?.('workingDirectory') ?? ctx.get('workingDirectory');
+      const session = agent?.session ?? agent?.ctx?.get?.('session');
+      return session ? wd?.get?.(session) : undefined;
+    },
+  ];
+  for (const attempt of attempts) {
+    try {
+      const value = attempt();
+      if (typeof value === 'string' && value) return value;
+    } catch {
+      /* 下一个 */
+    }
+  }
+  try {
+    const registry = ctx.get('workspaceRegistry');
+    const id = agent?.id;
+    for (const ws of registry?.list?.() ?? []) {
+      if (Array.isArray(ws?.sessionIds) && id && ws.sessionIds.includes(id)) {
+        if (typeof ws.path === 'string' && ws.path) return ws.path;
+      }
+    }
+  } catch {
+    /* 放弃 */
+  }
+  return '';
+}
+
+function workingDir(ctx, payload) {
   const agent = (payload && payload.agent) || {};
+  const fromAgent = usableRoot(agentCwd(ctx, agent));
+  if (fromAgent) return fromAgent;
   const candidates = [
     agent.cwd,
     agent.workdir,
@@ -212,13 +253,14 @@ function workingDir(payload) {
     const root = usableRoot(c);
     if (root) return root;
   }
+  // 实在拿不到会话目录时退回 DSH_HOME，绝不写进 profile。
   return dshHome();
 }
 
-function shrinkMessages(state, messages, payload) {
+function shrinkMessages(ctx, state, messages, payload) {
   const keepFrom = Math.max(0, messages.length - state.keepRecentMessages);
   const tag = sessionTag(payload);
-  const root = workingDir(payload);
+  const root = workingDir(ctx, payload);
   const dir = path.isAbsolute(state.archiveDir) ? state.archiveDir : path.join(root, state.archiveDir);
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const archiveFile = path.join(dir, `ctx-${tag}-${stamp}.md`);
@@ -282,11 +324,35 @@ function sessionIdOf(session) {
   return 'session';
 }
 
-function sessionCwd(session) {
-  const candidates = [session && session.cwd, session && session.workspace && session.workspace.path];
+function sessionCwd(ctx, session) {
+  const candidates = [
+    session && session.header && session.header.cwd,
+    session && session.cwd,
+    session && session.workspace && session.workspace.path,
+  ];
   for (const c of candidates) {
     const root = usableRoot(c);
     if (root) return root;
+  }
+  try {
+    const wd = ctx.get('workingDirectory');
+    const value = wd && wd.get ? wd.get(session) : undefined;
+    const root = usableRoot(value);
+    if (root) return root;
+  } catch {
+    /* 下一个 */
+  }
+  try {
+    const registry = ctx.get('workspaceRegistry');
+    const id = session && session.id;
+    for (const ws of registry?.list?.() ?? []) {
+      if (Array.isArray(ws?.sessionIds) && id && ws.sessionIds.includes(id)) {
+        const root = usableRoot(ws.path);
+        if (root) return root;
+      }
+    }
+  } catch {
+    /* 放弃 */
   }
   return dshHome();
 }
@@ -342,7 +408,7 @@ export function apply(ctx, config = {}) {
               return decision;
             }
 
-            const result = shrinkMessages(state, messages, payload);
+            const result = shrinkMessages(ctx, state, messages, payload);
             if (!result.changed) return decision;
 
             lastArchiveMessageCount = messages.length;
@@ -409,7 +475,7 @@ export function apply(ctx, config = {}) {
 
   async function rescue(session, items) {
     const id = sessionIdOf(session);
-    const root = sessionCwd(session);
+    const root = sessionCwd(ctx, session);
     const dir = path.isAbsolute(state.reasoningDir)
       ? state.reasoningDir
       : path.join(root, state.reasoningDir);
@@ -493,7 +559,7 @@ export function apply(ctx, config = {}) {
       render: (_args, value) => [{ type: 'text', text: String(value) }],
     },
     async execute(args, exec) {
-      const root = usableRoot(exec && exec.cwd) || dshHome();
+      const root = usableRoot(exec && exec.cwd) || usableRoot(agentCwd(ctx, exec && exec.agent)) || dshHome();
       const archiveAbs = path.isAbsolute(state.archiveDir) ? state.archiveDir : path.join(root, state.archiveDir);
       const reasoningAbs = path.isAbsolute(state.reasoningDir) ? state.reasoningDir : path.join(root, state.reasoningDir);
       const lines = [
@@ -555,7 +621,7 @@ export function apply(ctx, config = {}) {
       render: (_args, value) => [{ type: 'text', text: String(value) }],
     },
     async execute(args, exec) {
-      const root = usableRoot(exec && exec.cwd) || dshHome();
+      const root = usableRoot(exec && exec.cwd) || usableRoot(agentCwd(ctx, exec && exec.agent)) || dshHome();
       const dir = path.join(root, '.dsh-task');
       const file = path.join(dir, `handoff-${new Date().toISOString().replace(/[:.]/g, '-')}.md`);
       try {
@@ -586,7 +652,7 @@ export function apply(ctx, config = {}) {
       render: (_args, value) => [{ type: 'text', text: String(value) }],
     },
     async execute(args, exec) {
-      const root = usableRoot(exec && exec.cwd) || dshHome();
+      const root = usableRoot(exec && exec.cwd) || usableRoot(agentCwd(ctx, exec && exec.agent)) || dshHome();
       const dir = path.isAbsolute(state.reasoningDir) ? state.reasoningDir : path.join(root, state.reasoningDir);
       try {
         if (args && args.action === 'read' && args.file) {
