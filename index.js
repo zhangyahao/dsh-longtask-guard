@@ -18,9 +18,9 @@ export const inject = ['tools'];
 
 const DEFAULTS = {
   enabled: true,
-  // 1M token 窗口约合 400 万字符；120 万字符（约 30 万 token）时开始外化，
-  // 与当前实际运行的配置保持一致。
-  externalizeAtChars: 1200000,
+  // 1M token 窗口约合 400 万字符；60 万字符（约 15 万 token）时开始外化，
+  // 既留足余量，又不至于每轮都动消息、白白失效一次 prompt 缓存。
+  externalizeAtChars: 600000,
   keepRecentMessages: 40,
   archiveDir: '.dsh-task/archive',
   minMessageChars: 1200,
