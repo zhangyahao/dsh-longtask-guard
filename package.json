@@ -2,7 +2,7 @@
   "name": "dsh-longtask-guard",
   "version": "0.1.0",
   "private": true,
-  "description": "Long-task context guard for DeepSeek Harness: externalize bulky history to project files so long sessions keep running.",
+  "description": "长任务上下文护栏：把臃肿的历史外化到项目文件，让长会话不因上下文过大而中断。",
   "type": "module",
   "main": "index.js",
   "exports": {
